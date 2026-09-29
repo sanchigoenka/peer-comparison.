@@ -35,6 +35,8 @@ COMPANIES = {
     "Britannia": "FMCG", "Dabur": "FMCG",
 }
 YEARS = list(range(2017, 2027))  # FY2017 ... FY2026
+DATA_SOURCE = "Screener.in (Consolidated financials)"
+DATA_EXPORTED = "29-09-2026"
 
 # Metric -> True if higher is better, False if lower is better
 QUALITY_METRICS = {
@@ -103,6 +105,8 @@ def percentile_scores(df: pd.DataFrame, metrics: dict) -> pd.DataFrame:
 # ---------------------------------------------------------------------
 st.set_page_config(page_title="Peer Comparison Dashboard", layout="wide")
 st.title("Peer Comparison Dashboard: Indian Listed Companies")
+st.caption(f"Source: {DATA_SOURCE} · Data exported {DATA_EXPORTED} · "
+          f"Figures in Rs crore unless stated as a ratio or multiple")
 
 my_data = load_csv()
 has_real = my_data[list(ALL_METRICS)].notna().any().any() if len(my_data) else False
@@ -163,7 +167,7 @@ if len(df) < 2:
     st.warning("Not enough data in this period for at least two companies.")
     st.stop()
 
-st.subheader(f"{sector} | {period_label}")
+st.subheader(f"{sector} Sector Peer Comparison — {period_label}")
 
 # ---------------------------------------------------------------------
 # 5. TABS
@@ -175,7 +179,8 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
 with tab1:
     show = df.round(2).copy()
     show["Years of data"] = years_with_data.reindex(show.index)
-    st.dataframe(show, use_container_width=True)
+    fmt = {col: "{:.2f}" for col in metric_cols}
+    st.dataframe(show.style.format(fmt, na_rep="—"), use_container_width=True)
     st.download_button("Download this table (CSV)",
                        show.to_csv().encode(), "comparison.csv", "text/csv")
 
@@ -187,7 +192,8 @@ with tab1:
             rows.append({"Factor": col, "Best": best,
                          "Value": round(df.loc[best, col], 2),
                          "Better when": "Higher" if hib else "Lower"})
-    st.dataframe(pd.DataFrame(rows).set_index("Factor"),
+    best_df = pd.DataFrame(rows).set_index("Factor")
+    st.dataframe(best_df.style.format({"Value": "{:.2f}"}),
                  use_container_width=True)
 
 with tab2:
@@ -236,24 +242,32 @@ with tab4:
 
 with tab5:
     st.markdown(
-        """
-**How to fill data.csv** (one row per company per year)
-- Open `data.csv` in Excel or Google Sheets, fill the blank cells, and save as CSV.
-- Growth = year-on-year % change. Valuation = multiple at financial year-end.
-- Use consistent definitions for every company (e.g. always EBITDA margin).
-- Leave a cell blank if the number isn't available; it is skipped in averages.
-- Note mergers/demergers (e.g. ITC's hotels demerger) since they distort trends.
+        f"""
+**About this dashboard**
+Compares Indian IT and FMCG companies on 10 financial factors covering
+growth, profitability, financial health and valuation, across up to 10
+years (FY2017-FY2026).
+
+**Data source:** {DATA_SOURCE}, exported {DATA_EXPORTED}. Figures in Rs
+crore unless the metric is already a ratio or multiple.
+
+**How scoring works:** in the "Quality vs valuation" tab, each company is
+ranked against the others you select (direction-aware — lower debt scores
+better). Scores are relative to your chosen peers, so they shift when you
+add or remove companies. Valuation is kept separate from the quality score
+on purpose, since a cheap stock isn't automatically a good one.
 
 **How averaging works:** the average is a simple mean of the yearly values
-in your chosen range. Averaging YoY growth rates is a simplification; a CAGR
-would be more precise for long periods.
+in your chosen range. Averaging YoY growth rates is a simplification; a
+CAGR would be more precise for long periods.
 
-**How scoring works:** companies are ranked against the others you selected
-(direction-aware: lower debt scores better). Scores are relative to the chosen
-peers, so they change when you add or remove companies. Valuation is kept out
-of the quality score on purpose.
-
-**Compare within a sector.** Ratios like margins and debt are not comparable
-across IT and FMCG. Banks need a separate set of metrics.
+**Limitations**
+- Ratios such as margins and debt levels are not comparable across sectors
+  (IT vs FMCG) — compare within a sector only. Banks need a different set
+  of metrics entirely.
+- Mergers or demergers (e.g. ITC's hotels demerger) can distort a
+  company's year-on-year trend for the affected years.
+- Data reflects each company's Consolidated financial statements at the
+  time of export and may not include later restatements.
         """
     )
